@@ -56,7 +56,13 @@ list is deliberately conservative because a false positive on a security report
 costs more than a miss. PRs very welcome on both.
 ```
 
-**Timing:** Tuesday to Thursday, 08:00 to 10:00 ET. Do not ask anyone to upvote, HN detects voting rings and it will bury the post.
+**Status: blocked.** HN is currently restricting Show HN from accounts without
+history. Do not try a second account, that gets both banned. Worth revisiting in
+a couple of months after commenting usefully on the site, ideally alongside a
+release that adds Firestore support so there is a reason for it to be new.
+
+**Timing when it reopens:** Tuesday to Thursday, 08:00 to 10:00 ET. Never ask
+anyone to upvote, HN detects voting rings and buries the post.
 
 ---
 
@@ -116,12 +122,13 @@ rules are the obvious gap.
 
 ## 3. r/Supabase
 
-Narrower and more technical. This audience knows the subject, so no explaining what RLS is.
+Narrower and more technical. This audience knows the subject, so no explaining
+what RLS is. Post this one first: smallest audience, highest hit rate.
 
 **Title**
 
 ```
-CLI that probes your project for tables that answer anon requests
+Free CLI that checks whether your tables and storage buckets answer anonymous requests
 ```
 
 **Body**
@@ -129,21 +136,30 @@ CLI that probes your project for tables that answer anon requests
 ```
 npx leakprobe https://yourapp.com
 
-Pulls the anon key out of your published bundle (it is a JWT with role=anon, so
-it is identifiable), reads /rest/v1/ for the table list, then requests one row
-from each with limit=1 and reports which ones return 200 with a body.
+No install, no signup, runs locally.
 
-Column names only in the output. Row contents are never printed or sent
-anywhere, and there is no server, it runs locally.
+What it does for Supabase specifically:
 
-It also checks whether a service_role token has ended up in the bundle, which is
-the worse version of the same problem and more common than you would hope.
+- Pulls the anon key out of your published bundle (it's a JWT with role=anon, so it's identifiable), reads /rest/v1/ for the table list, then requests one row from each with limit=1 and reports which ones answer.
+- Checks whether a service_role token has ended up in the bundle, which is the worse version of the same problem and more common than you'd hope.
+- Lists your storage buckets anonymously and flags any marked public.
 
-Caps at 25 tables per scan to keep it quick. MIT:
-https://github.com/NishantDixit1/leakprobe
+Output is column names only. Row contents are never printed or sent anywhere. There's no server.
+
+It also covers the non-Supabase things that go wrong in the same apps: keys in the JS bundle, .env and backup.sql being served, source maps, session cookie flags, CORS reflecting any origin with credentials, http not redirecting to https.
+
+Every finding comes with a prompt you can paste into Claude Code or Cursor, since knowing RLS is off doesn't help much if nobody explained what to write.
+
+Caps at 25 tables per scan to keep it fast. Exit code 2 on a critical or high, so it works in CI.
+
+MIT, zero deps, Node 18+: https://github.com/NishantDixit1/leakprobe
+
+Firebase RTDB is covered too. Firestore isn't yet, since there's no reliable way to discover collection names from outside. PRs welcome.
 ```
 
----
+**Also post this verbatim in the Supabase Discord**, in the help or
+show-and-tell channel. Same audience, no karma gate, and the people there are
+the ones most likely to actually run it.
 
 ## 4. Dev.to and Hashnode
 
@@ -183,11 +199,13 @@ Tuesday.
 
 ## Order and timing
 
-1. **Show HN first.** Biggest upside and the only one that can produce hundreds
-   of links on its own.
-2. **r/Supabase the same day**, different audience, no overlap.
-3. **r/SaaS two days later.** Mention it got some traction on HN if it did.
+1. **r/Supabase and the Supabase Discord first.** Smallest audience, highest
+   hit rate, and nothing gates it.
+2. **LinkedIn the same day.** Low expected engagement, but the readers are
+   people who might hire the studio, which the others are not.
+3. **r/SaaS two days later**, if the Reddit account is old enough to post there.
 4. **Dev.to cross-posts**, one a week after that.
+5. **Show HN** once the account has history. Blocked for now.
 
 ## Two things not to do
 
