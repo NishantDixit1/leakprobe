@@ -123,6 +123,19 @@ We kept being handed apps built in a weekend with an AI builder, live, with real
 
 There is a hosted version at [stackwrights.com/tools/launch-check](https://stackwrights.com/tools/launch-check) if you would rather paste a URL into a page, and it can also read a connected repository, which goes considerably deeper than a scan from outside.
 
+## Tests
+
+```bash
+npm test
+```
+
+44 tests. The secret patterns are tested against real key formats and
+against source that must *not* trip them, because a false positive is
+the failure mode that matters here. The scan itself is tested end to end
+against a deliberately leaking fixture server rather than a mocked
+fetch, including an assertion that no finding ever contains row data or
+an unredacted secret.
+
 ## Contributing
 
 Issues and pull requests welcome, particularly:

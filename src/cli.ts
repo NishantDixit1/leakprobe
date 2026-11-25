@@ -1,6 +1,20 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { runScan } from "./checks.js";
 import type { Finding, ScanResult } from "./types.js";
+
+/** Read from package.json so --version cannot drift from what is published. */
+function version(): string {
+  try {
+    const pkg = fileURLToPath(new URL("../package.json", import.meta.url));
+    const parsed: unknown = JSON.parse(readFileSync(pkg, "utf8"));
+    const v = (parsed as { version?: unknown })?.version;
+    return typeof v === "string" ? v : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 
 /**
  * Exit codes are chosen so this is usable in CI:
@@ -117,13 +131,19 @@ function printHuman(r: ScanResult, { fix, quiet }: { fix: boolean; quiet: boolea
 async function main() {
   const { flags, opts, positional } = parseArgs(process.argv.slice(2));
 
-  if (flags.has("h") || flags.has("help") || positional.length === 0) {
-    console.log(HELP);
-    process.exit(positional.length === 0 && !flags.has("h") && !flags.has("help") ? 1 : 0);
-  }
+  // Version first: --version takes no positional argument, so checking
+  // the no-arguments case before it printed help instead.
   if (flags.has("v") || flags.has("version")) {
-    console.log("0.1.0");
+    console.log(version());
     process.exit(0);
+  }
+  if (flags.has("h") || flags.has("help")) {
+    console.log(HELP);
+    process.exit(0);
+  }
+  if (positional.length === 0) {
+    console.log(HELP);
+    process.exit(1);
   }
 
   const url = positional[0];

@@ -18,6 +18,4 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci
       - run: npm run check
-      - run: npm run build
-      # The CLI must at minimum run and print help without throwing.
-      - run: node dist/cli.js --help
+      - run: npm test

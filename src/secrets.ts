@@ -13,7 +13,11 @@ export type SecretHit = { name: string; redacted: string; note: string };
 const JWT = /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/g;
 
 const PATTERNS: { name: string; re: RegExp; note: string }[] = [
-  { name: "OpenAI API key", re: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g, note: "lets anyone spend on your OpenAI account" },
+  // The negative lookahead matters: without it this pattern also matches
+  // sk-ant-... and an Anthropic key gets reported twice, once under the
+  // wrong provider. A report that misidentifies a key is a report people
+  // stop trusting.
+  { name: "OpenAI API key", re: /\bsk-(?!ant-)(?:proj-)?[A-Za-z0-9_-]{20,}\b/g, note: "lets anyone spend on your OpenAI account" },
   { name: "Anthropic API key", re: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g, note: "lets anyone spend on your Anthropic account" },
   { name: "Stripe secret key", re: /\bsk_(?:live|test)_[A-Za-z0-9]{20,}\b/g, note: "can move money and read customer records" },
   { name: "AWS access key", re: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, note: "can reach your AWS account" },
