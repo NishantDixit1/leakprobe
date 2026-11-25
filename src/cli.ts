@@ -56,6 +56,8 @@ ${bold("Options")}
   --json              Machine-readable output
   --fix               Print the paste-ready fix prompt for each finding
   --fail-on=<level>   critical | high | medium  (default: high)
+  --max-tables=<n>    How many database tables to probe (default: 25)
+  --all-tables        Probe every table, however many there are
   --quiet             Only print findings, not what passed
   -h, --help          This text
   -v, --version       Print version
@@ -64,6 +66,7 @@ ${bold("Examples")}
   npx leakprobe https://myapp.vercel.app
   npx leakprobe myapp.com --fix
   npx leakprobe myapp.com --json > report.json
+  npx leakprobe myapp.com --all-tables
 
 ${bold("Exit codes")}
   0  clean
@@ -152,7 +155,20 @@ async function main() {
     process.exit(1);
   }
 
-  const result = await runScan(url);
+  const maxTablesRaw = opts.get("max-tables");
+  let maxTables: number | undefined;
+  if (flags.has("all-tables")) {
+    maxTables = Number.MAX_SAFE_INTEGER;
+  } else if (maxTablesRaw !== undefined) {
+    const n = Number(maxTablesRaw);
+    if (!Number.isInteger(n) || n < 1) {
+      console.error(`--max-tables needs a whole number of 1 or more, got: ${maxTablesRaw}`);
+      process.exit(1);
+    }
+    maxTables = n;
+  }
+
+  const result = await runScan(url, maxTables === undefined ? {} : { maxTables });
 
   if ("error" in result) {
     console.error(red(`\n  ${result.error}\n`));

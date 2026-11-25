@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cookieCheck } from "../src/extra-checks.js";
+import { cookieCheck, tableCoverage } from "../src/extra-checks.js";
 
 // ── Cookie flags ────────────────────────────────────────────────────
 // Only cookies that plausibly carry a session are judged. Flagging a
@@ -49,4 +49,41 @@ test("the cookie finding carries a usable fix prompt", () => {
   assert.ok(f);
   assert.ok(f.fixPrompt.length > 40);
   assert.equal(f.severity, "medium");
+});
+
+// ── Table probe coverage ────────────────────────────────────────────
+// Reported by a reader: the probe stopped at 25 tables and said nothing
+// about the rest, so a project with 40 could print "nothing found" and
+// exit 0 in CI with 15 never asked.
+
+test("a capped probe states what it covered", () => {
+  const c = tableCoverage(40, 25);
+  assert.equal(c.checked, 25);
+  assert.equal(c.unchecked, 15);
+  assert.equal(c.label, "checked 25 of 40 tables");
+});
+
+test("the uncovered tables are reported, not dropped", () => {
+  const note = tableCoverage(40, 25).note;
+  assert.ok(note, "15 unprobed tables were dropped silently");
+  assert.match(note.reason, /15 of 40/);
+  assert.match(note.reason, /--all-tables/);
+});
+
+test("nothing is flagged when every table was covered", () => {
+  const c = tableCoverage(10, 25);
+  assert.equal(c.checked, 10);
+  assert.equal(c.unchecked, 0);
+  assert.equal(c.note, null);
+  assert.equal(c.label, "checked 10 of 10 tables");
+});
+
+test("lifting the cap covers everything", () => {
+  const c = tableCoverage(400, Number.MAX_SAFE_INTEGER);
+  assert.equal(c.unchecked, 0);
+  assert.equal(c.note, null);
+});
+
+test("a schema with no tables is not described as partially covered", () => {
+  assert.equal(tableCoverage(0, 25).note, null);
 });

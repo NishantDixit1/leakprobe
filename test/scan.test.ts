@@ -33,6 +33,8 @@ const state = {
   serveBackup: false,
   /** Answer like bot protection rather than like the app. */
   shield: false,
+  /** Pretend to be a Supabase project exposing this many tables. */
+  tables: 0,
 };
 
 before(async () => {
@@ -65,8 +67,21 @@ before(async () => {
 
     if (url === "/app.js") {
       const secret = state.leakKey ? `const k="sk-proj-abcdefghijklmnopqrstuvwxyz0123456789";` : "";
+      const project = state.tables > 0 ? base : "https://abcdefghijklmnopqrst.supabase.co";
       return void res.writeHead(200, { "content-type": "application/javascript" })
-        .end(`${secret}\nconst sb=createClient("https://abcdefghijklmnopqrst.supabase.co","${jwt("anon")}");`);
+        .end(`${secret}\nconst sb=createClient("${project}","${jwt("anon")}");`);
+    }
+
+    if (state.tables > 0 && url === "/rest/v1/") {
+      const definitions: Record<string, object> = {};
+      for (let i = 0; i < state.tables; i++) definitions[`table_${i}`] = {};
+      return void res.writeHead(200, { "content-type": "application/json" })
+        .end(JSON.stringify({ definitions }));
+    }
+    if (state.tables > 0 && url.startsWith("/rest/v1/table_")) {
+      // Every table refuses, so the only thing under test is coverage.
+      return void res.writeHead(401, { "content-type": "application/json" })
+        .end(JSON.stringify({ message: "permission denied" }));
     }
 
     if (url === "/backup.sql") {
@@ -103,7 +118,7 @@ const ok = (r: ScanResult | { error: string }): ScanResult => {
 const ids = (r: ScanResult) => r.findings.map((f) => f.id);
 
 test("finds the leaked key, the served .env and the missing headers", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false, tables: 0 });
   const r = ok(await runScan(base));
   assert.ok(ids(r).includes("secrets"), "missed the API key in the bundle");
   assert.ok(ids(r).includes("exposed-files"), "missed the served .env");
@@ -111,20 +126,20 @@ test("finds the leaked key, the served .env and the missing headers", async () =
 });
 
 test("the anon key alone is not reported as a leak", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false, tables: 0 });
   const r = ok(await runScan(base));
   assert.deepEqual(ids(r), [], `clean app reported: ${JSON.stringify(r.findings.map((f) => f.title))}`);
   assert.ok(r.passed.some((p) => p.includes("No secret keys")));
 });
 
 test("a clean app passes the header check", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false, tables: 0 });
   const r = ok(await runScan(base));
   assert.ok(r.passed.some((p) => p.includes("Security headers")));
 });
 
 test("findings never contain row data, and secrets are redacted", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false, tables: 0 });
   const r = ok(await runScan(base));
   const dump = JSON.stringify(r);
   assert.ok(!dump.includes("sk-proj-abcdefghijklmnopqrstuvwxyz0123456789"), "full secret leaked into the report");
@@ -132,7 +147,7 @@ test("findings never contain row data, and secrets are redacted", async () => {
 });
 
 test("every finding carries a fix prompt", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false, tables: 0 });
   const r = ok(await runScan(base));
   for (const f of r.findings) {
     assert.ok(f.fixPrompt.length > 40, `${f.id} has no usable fix prompt`);
@@ -141,7 +156,7 @@ test("every finding carries a fix prompt", async () => {
 });
 
 test("critical findings sort above medium", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false, tables: 0 });
   const r = ok(await runScan(base));
   const rank = ["critical", "high", "medium", "info"];
   const seq = r.findings.map((f) => rank.indexOf(f.severity));
@@ -149,7 +164,7 @@ test("critical findings sort above medium", async () => {
 });
 
 test("Supabase is detected and reported in the stack", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false, tables: 0 });
   const r = ok(await runScan(base));
   assert.ok(r.stack.includes("Supabase"), `stack was ${JSON.stringify(r.stack)}`);
 });

@@ -194,3 +194,29 @@ export const EXTRA_PATHS: { path: string; label: string; looksReal: RegExp }[] =
   { path: "/.npmrc", label: "npm credentials", looksReal: /_authToken|registry=/ },
   { path: "/config.json", label: "configuration file", looksReal: /"(?:password|secret|apiKey|api_key|token)"\s*:/i },
 ];
+
+/**
+ * What a capped table probe actually covered.
+ *
+ * Reported by a reader of the first release: the probe stopped at 25
+ * tables and said nothing about the rest, so a project with 40 could
+ * print "nothing found" and exit 0 in CI with 15 never asked. A cap
+ * nobody is told about turns "nothing found" into a claim the scan
+ * never made.
+ */
+export function tableCoverage(total: number, maxTables: number) {
+  const checked = Math.min(total, Math.max(1, maxTables));
+  const unchecked = Math.max(0, total - checked);
+  return {
+    checked,
+    unchecked,
+    label: `checked ${checked} of ${total} tables`,
+    note:
+      unchecked > 0
+        ? {
+            check: "Database permissions on the remaining tables",
+            reason: `${unchecked} of ${total} tables were not probed, because a scan stops at ${checked} to stay quick on a large schema. Those tables could still be readable. Run with --all-tables, or --max-tables=${total}, to cover every one.`,
+          }
+        : null,
+  };
+}

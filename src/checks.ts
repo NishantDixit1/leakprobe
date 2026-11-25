@@ -7,6 +7,7 @@ import {
   firebaseCheck,
   httpsRedirectCheck,
   storageCheck,
+  tableCoverage,
   EXTRA_PATHS,
 } from "./extra-checks.js";
 
@@ -41,8 +42,23 @@ function detectShield(status: number, headers: Headers, body: string): string | 
   return null;
 }
 
-export async function runScan(rawUrl: string): Promise<ScanResult | { error: string }> {
+export type ScanOptions = {
+  /**
+   * How many database tables to probe. Each one is a request, so the
+   * default keeps a scan quick on a large schema. Whatever it is set
+   * to, the number checked and the number skipped are always reported:
+   * a cap nobody is told about turns "nothing found" into a claim the
+   * scan never made.
+   */
+  maxTables?: number;
+};
+
+export async function runScan(
+  rawUrl: string,
+  options: ScanOptions = {},
+): Promise<ScanResult | { error: string }> {
   const started = Date.now();
+  const maxTables = Math.max(1, options.maxTables ?? 25);
 
   const target = parseTarget(rawUrl);
   if (!target.ok) return { error: target.reason };
@@ -242,8 +258,11 @@ Then show me the diff before applying it.`,
         reason: "Supabase was detected but the table list was not readable, which is usually a good sign.",
       });
     } else {
+      const cover = tableCoverage(tables.length, maxTables);
+      const coverage = cover.label;
+
       const open: string[] = [];
-      for (const table of tables.slice(0, 25)) {
+      for (const table of tables.slice(0, cover.checked)) {
         const probe = await get(
           `${supaUrl}/rest/v1/${encodeURIComponent(table)}?select=*&limit=1`,
           { headers: auth, maxBytes: 50_000, timeoutMs: 5_000 },
@@ -266,7 +285,7 @@ Then show me the diff before applying it.`,
           id: "rls",
           severity: "critical",
           title: "Your database is answering strangers",
-          what: `We asked your database for a row from ${open.length} table${open.length > 1 ? "s" : ""} without logging in, and it handed ${open.length > 1 ? "them" : "it"} over. Anyone on the internet can do the same.`,
+          what: `We asked your database for a row from ${open.length} table${open.length > 1 ? "s" : ""} without logging in, and it handed ${open.length > 1 ? "them" : "it"} over. Anyone on the internet can do the same. We ${coverage}.`,
           risk:
             "Whatever is in these tables is effectively public: customer records, emails, orders, messages. This is the most common serious problem in apps built with AI tools, because the code works perfectly while the data sits wide open.",
           evidence: open,
@@ -284,8 +303,10 @@ For each table:
 Then give me the SQL, and give me a test I can run as a logged-in user to confirm I cannot read another user's rows.`,
         });
       } else {
-        passed.push("Database refused anonymous read requests");
+        passed.push(`Database refused anonymous read requests (${coverage})`);
       }
+
+      if (cover.note) skipped.push(cover.note);
     }
     const storageFinding = await storageCheck(supaUrl, anonKey);
     if (storageFinding) findings.push(storageFinding);
