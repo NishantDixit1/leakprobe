@@ -1,0 +1,44 @@
+{
+  "name": "launch-check",
+  "version": "0.1.0",
+  "description": "Check whether your deployed app is leaking secrets or database rows, before your customers find out. Zero dependencies.",
+  "keywords": [
+    "security",
+    "supabase",
+    "rls",
+    "row-level-security",
+    "secrets",
+    "api-keys",
+    "lovable",
+    "bolt",
+    "vibe-coding",
+    "nextjs",
+    "vite",
+    "cli",
+    "audit"
+  ],
+  "license": "MIT",
+  "author": "Stackwrights (https://stackwrights.com)",
+  "homepage": "https://github.com/NishantDixit1/launch-check#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NishantDixit1/launch-check.git"
+  },
+  "bugs": "https://github.com/NishantDixit1/launch-check/issues",
+  "type": "module",
+  "bin": { "launch-check": "dist/cli.js" },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
