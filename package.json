@@ -1,6 +1,6 @@
 {
   "name": "leakprobe",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Check whether your deployed app is leaking secrets or database rows, before your customers find out. Zero dependencies.",
   "keywords": [
     "security",

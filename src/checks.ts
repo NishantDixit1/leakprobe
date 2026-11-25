@@ -22,6 +22,25 @@ import {
  * Findings never include your data. A table that leaks is reported by
  * name and column names only, never row contents.
  */
+/** Names the protection in front of a site, if the response is its page. */
+function detectShield(status: number, headers: Headers, body: string): string | null {
+  const h = (k: string) => headers.get(k)?.toLowerCase() ?? "";
+
+  if (h("x-vercel-mitigated").includes("challenge")) return "Vercel bot protection";
+  if (h("cf-mitigated").includes("challenge")) return "Cloudflare bot protection";
+
+  if (status === 403 || status === 429 || status === 503) {
+    const server = h("server");
+    const b = body.slice(0, 4000).toLowerCase();
+    if (server.includes("cloudflare") || b.includes("cf-chl") || b.includes("just a moment"))
+      return "Cloudflare bot protection";
+    if (server.includes("vercel")) return "Vercel bot protection";
+    if (b.includes("captcha") || b.includes("access denied") || b.includes("attention required"))
+      return "A bot protection or firewall";
+  }
+  return null;
+}
+
 export async function runScan(rawUrl: string): Promise<ScanResult | { error: string }> {
   const started = Date.now();
 
@@ -37,6 +56,17 @@ export async function runScan(rawUrl: string): Promise<ScanResult | { error: str
   const page = await get(target.url.toString());
   if (!page) {
     return { error: "Could not load that page. Check the address is live and reachable." };
+  }
+
+  // Bot protection answers with its own page, and every check below
+  // would then be describing the challenge rather than the app: no
+  // security headers, no bundle, no secrets, all of it wrong and all of
+  // it stated confidently. Refuse to report instead.
+  const shield = detectShield(page.status, page.headers, page.body);
+  if (shield) {
+    return {
+      error: `${shield} answered instead of your app, so there is nothing real to check. This usually means the scan is being treated as a bot. Try from a different network, or allow your own address in the protection settings while you run it.`,
+    };
   }
 
   // ── Security headers ───────────────────────────────────────────────
@@ -75,6 +105,12 @@ If this is a Next.js project, add a headers() function in next.config.ts. If it 
   const cookieFinding = cookieCheck(page.cookies, target.url.protocol === "https:");
   if (cookieFinding) findings.push(cookieFinding);
   else if (page.cookies.length > 0) passed.push("Session cookies carry the usual flags");
+  else
+    skipped.push({
+      check: "Session cookie flags",
+      reason:
+        "This request set no cookies, so there was nothing to judge. A site that only sets a session after sign-in will not be covered by a scan of the public page.",
+    });
 
   // ── Plain http, and who may call the app ───────────────────────────
   if (target.url.protocol === "https:") {
@@ -85,6 +121,7 @@ If this is a Next.js project, add a headers() function in next.config.ts. If it 
 
   const corsFinding = await corsCheck(target.url.toString());
   if (corsFinding) findings.push(corsFinding);
+  else passed.push("No site is allowed to call your app on a user's behalf");
 
   // ── Collect the JavaScript the browser downloads ───────────────────
   const scriptSrcs = [...page.body.matchAll(/<script[^>]+src=["']([^"']+)["']/g)]
@@ -120,6 +157,8 @@ If this is a Next.js project, add a headers() function in next.config.ts. If it 
     findings.push(firebaseFinding);
   } else if (stack.has("Firebase")) {
     passed.push("Firebase database refused an anonymous read");
+  } else {
+    skipped.push({ check: "Firebase rules", reason: "No Firebase database found in this app." });
   }
 
   // ── Exposed secrets ────────────────────────────────────────────────
@@ -156,6 +195,9 @@ Then show me the diff before applying it.`,
   // ── Source maps ────────────────────────────────────────────────────
   const mapRef = bundle.match(/\/\/# sourceMappingURL=([^\s*]+)/)?.[1];
   const firstScript = scriptSrcs[0];
+  if (!mapRef || !firstScript) {
+    passed.push("Source maps are not referenced in the published bundle");
+  }
   if (mapRef && firstScript) {
     const mapUrl = new URL(mapRef, firstScript).toString();
     const map = await get(mapUrl, { maxBytes: 200_000 });
@@ -250,8 +292,13 @@ Then give me the SQL, and give me a test I can run as a logged-in user to confir
     else passed.push("Storage buckets are not listable anonymously");
   } else if (stack.has("Supabase")) {
     skipped.push({
-      check: "Database permissions",
+      check: "Database permissions and storage",
       reason: "Supabase detected but no public key was found to test with.",
+    });
+  } else {
+    skipped.push({
+      check: "Database permissions and storage",
+      reason: "No Supabase project found in this app.",
     });
   }
 

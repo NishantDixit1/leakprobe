@@ -102,7 +102,9 @@ Fully typed. Zero runtime dependencies. Node 18 or newer.
 
 ## What it does not do
 
-Every report lists what it could not check, so a short report is never mistaken for a clean one.
+Every check reports itself as passed, failed or skipped, so a short report is never mistaken for a clean one. If your app has no Supabase project, you will see that written down rather than silently omitted.
+
+If the site is behind Cloudflare or Vercel bot protection, the scan refuses to run rather than describing the challenge page, which would otherwise look like an app with no security headers and no JavaScript.
 
 It does not test anything that needs the app actually running: how your login flow behaves in use, file uploads, or bugs that only appear under real traffic. It does not judge whether your business rules are correct, because that is a question about your intent rather than your code. Known vulnerabilities in your packages are better handled by GitHub's Dependabot, which is free.
 
@@ -134,7 +136,7 @@ There is a hosted version at [stackwrights.com/tools/launch-check](https://stack
 npm test
 ```
 
-58 tests. The secret patterns are tested against real key formats and
+60 tests. The secret patterns are tested against real key formats and
 against source that must *not* trip them, because a false positive is
 the failure mode that matters here. The scan itself is tested end to end
 against a deliberately leaking fixture server rather than a mocked

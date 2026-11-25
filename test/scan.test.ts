@@ -31,11 +31,19 @@ const state = {
   reflectOrigin: false,
   /** Serve a real-looking database dump. */
   serveBackup: false,
+  /** Answer like bot protection rather than like the app. */
+  shield: false,
 };
 
 before(async () => {
   server = http.createServer((req, res) => {
     const url = req.url ?? "/";
+
+    if (state.shield) {
+      return void res
+        .writeHead(403, { "content-type": "text/html", "x-vercel-mitigated": "challenge" })
+        .end("<html><body>Checking your browser</body></html>");
+    }
 
     const INDEX = `<!doctype html><html lang="en"><head><meta charset="UTF-8" /></head><body><script src="/app.js"></script></body></html>`;
 
@@ -95,7 +103,7 @@ const ok = (r: ScanResult | { error: string }): ScanResult => {
 const ids = (r: ScanResult) => r.findings.map((f) => f.id);
 
 test("finds the leaked key, the served .env and the missing headers", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
   const r = ok(await runScan(base));
   assert.ok(ids(r).includes("secrets"), "missed the API key in the bundle");
   assert.ok(ids(r).includes("exposed-files"), "missed the served .env");
@@ -103,20 +111,20 @@ test("finds the leaked key, the served .env and the missing headers", async () =
 });
 
 test("the anon key alone is not reported as a leak", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
   const r = ok(await runScan(base));
   assert.deepEqual(ids(r), [], `clean app reported: ${JSON.stringify(r.findings.map((f) => f.title))}`);
   assert.ok(r.passed.some((p) => p.includes("No secret keys")));
 });
 
 test("a clean app passes the header check", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
   const r = ok(await runScan(base));
   assert.ok(r.passed.some((p) => p.includes("Security headers")));
 });
 
 test("findings never contain row data, and secrets are redacted", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
   const r = ok(await runScan(base));
   const dump = JSON.stringify(r);
   assert.ok(!dump.includes("sk-proj-abcdefghijklmnopqrstuvwxyz0123456789"), "full secret leaked into the report");
@@ -124,7 +132,7 @@ test("findings never contain row data, and secrets are redacted", async () => {
 });
 
 test("every finding carries a fix prompt", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
   const r = ok(await runScan(base));
   for (const f of r.findings) {
     assert.ok(f.fixPrompt.length > 40, `${f.id} has no usable fix prompt`);
@@ -133,7 +141,7 @@ test("every finding carries a fix prompt", async () => {
 });
 
 test("critical findings sort above medium", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
   const r = ok(await runScan(base));
   const rank = ["critical", "high", "medium", "info"];
   const seq = r.findings.map((f) => rank.indexOf(f.severity));
@@ -141,7 +149,7 @@ test("critical findings sort above medium", async () => {
 });
 
 test("Supabase is detected and reported in the stack", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, reflectOrigin: false, serveBackup: false, shield: false });
   const r = ok(await runScan(base));
   assert.ok(r.stack.includes("Supabase"), `stack was ${JSON.stringify(r.stack)}`);
 });
@@ -206,6 +214,25 @@ test("a backup path that 404s is not reported", async () => {
   Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, serveBackup: false });
   const r = ok(await runScan(base));
   assert.ok(!ids(r).includes("exposed-files"));
+});
+
+// ── Bot protection ──────────────────────────────────────────────────
+// Scanning the challenge page and reporting on it is worse than not
+// scanning: every check would describe the protection, not the app, and
+// would say so confidently.
+
+test("a site behind bot protection is refused, not reported on", async () => {
+  Object.assign(state, { shield: true });
+  const r = await runScan(base);
+  assert.ok("error" in r, "reported findings for a challenge page");
+  assert.match((r as { error: string }).error, /bot protection/i);
+  state.shield = false;
+});
+
+test("a normal site is still scanned once protection is off", async () => {
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false, shield: false });
+  const r = await runScan(base);
+  assert.ok(!("error" in r));
 });
 
 test("an unreachable host returns an error rather than throwing", async () => {
