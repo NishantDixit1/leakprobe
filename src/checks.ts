@@ -232,7 +232,7 @@ Then give me the SQL, and give me a test I can run as a logged-in user to confir
   // So: establish the host's behaviour on a path that certainly does
   // not exist, then require the response to differ from it AND to
   // actually look like the file being asked for.
-  const decoy = await get(`${origin}/launch-check-${Date.now().toString(36)}-404`, {
+  const decoy = await get(`${origin}/leakprobe-${Date.now().toString(36)}-404`, {
     maxBytes: 20_000,
     timeoutMs: 5_000,
   });

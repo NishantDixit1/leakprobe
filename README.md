@@ -1,9 +1,9 @@
-# launch-check
+# leakprobe
 
 **Is your deployed app leaking anything?** One command, no install, no signup, no account.
 
 ```bash
-npx launch-check https://myapp.com
+npx leakprobe https://myapp.com
 ```
 
 Built something with Lovable, Bolt, Replit, v0 or Claude Code? It works. That is what those tools are good at. What they do not reliably produce is the part that makes software safe for strangers, and none of it is visible from using the app.
@@ -29,7 +29,7 @@ Detects Next.js, Vite, Supabase, Firebase, Stripe and Clerk, and adapts what it 
 ## Example
 
 ```
-launch-check  https://myapp.com
+leakprobe  https://myapp.com
 detected: Vite, Supabase
 
 CRITICAL  Your database is answering strangers
@@ -51,7 +51,7 @@ ok  No configuration files exposed
 Knowing that row level security is off does not help if you do not know what row level security is.
 
 ```bash
-npx launch-check https://myapp.com --fix
+npx leakprobe https://myapp.com --fix
 ```
 
 Every finding comes with a paste-ready prompt written for the assistant that built your app. Copy it into Claude Code, Cursor, Lovable or Bolt and it makes the change in your codebase. You do not need to understand the fix to apply it, though you should read what the assistant proposes before accepting it.
@@ -68,7 +68,7 @@ Exit codes are chosen for this:
 
 ```yaml
 - name: Check the deploy is not leaking
-  run: npx launch-check https://myapp.com --fail-on=high
+  run: npx leakprobe https://myapp.com --fail-on=high
 ```
 
 ## Options
@@ -85,7 +85,7 @@ Exit codes are chosen for this:
 ## Programmatic use
 
 ```ts
-import { runScan } from "launch-check";
+import { runScan } from "leakprobe";
 
 const result = await runScan("https://myapp.com");
 if ("error" in result) throw new Error(result.error);

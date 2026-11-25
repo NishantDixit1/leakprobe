@@ -1,5 +1,5 @@
 {
-  "name": "launch-check",
+  "name": "leakprobe",
   "version": "0.1.0",
   "description": "Check whether your deployed app is leaking secrets or database rows, before your customers find out. Zero dependencies.",
   "keywords": [
@@ -19,15 +19,15 @@
   ],
   "license": "MIT",
   "author": "Stackwrights (https://stackwrights.com)",
-  "homepage": "https://github.com/NishantDixit1/launch-check#readme",
+  "homepage": "https://github.com/NishantDixit1/leakprobe#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NishantDixit1/launch-check.git"
+    "url": "git+https://github.com/NishantDixit1/leakprobe.git"
   },
-  "bugs": "https://github.com/NishantDixit1/launch-check/issues",
+  "bugs": "https://github.com/NishantDixit1/leakprobe/issues",
   "type": "module",
   "bin": {
-    "launch-check": "dist/cli.js"
+    "leakprobe": "dist/cli.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

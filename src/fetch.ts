@@ -19,7 +19,7 @@ export async function get(
 
   try {
     const res = await fetch(url, {
-      headers: { "user-agent": "launch-check (+https://github.com/NishantDixit1/launch-check)", ...headers },
+      headers: { "user-agent": "leakprobe (+https://github.com/NishantDixit1/leakprobe)", ...headers },
       redirect: "follow",
       signal: ctl.signal,
     });

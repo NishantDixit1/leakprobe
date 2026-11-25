@@ -41,9 +41,9 @@ const SEVERITY_LABEL: Record<Finding["severity"], string> = {
 };
 
 const HELP = `
-${bold("launch-check")} — is your deployed app leaking anything?
+${bold("leakprobe")} — is your deployed app leaking anything?
 
-  ${bold("npx launch-check")} <url> [options]
+  ${bold("npx leakprobe")} <url> [options]
 
 Checks what a stranger can already see: secret keys in your JavaScript,
 database tables that answer anonymous requests, downloadable .env files,
@@ -61,9 +61,9 @@ ${bold("Options")}
   -v, --version       Print version
 
 ${bold("Examples")}
-  npx launch-check https://myapp.vercel.app
-  npx launch-check myapp.com --fix
-  npx launch-check myapp.com --json > report.json
+  npx leakprobe https://myapp.vercel.app
+  npx leakprobe myapp.com --fix
+  npx leakprobe myapp.com --json > report.json
 
 ${bold("Exit codes")}
   0  clean
@@ -93,7 +93,7 @@ function parseArgs(argv: string[]) {
 
 function printHuman(r: ScanResult, { fix, quiet }: { fix: boolean; quiet: boolean }) {
   console.log("");
-  console.log(`${bold("launch-check")}  ${cyan(r.url)}`);
+  console.log(`${bold("leakprobe")}  ${cyan(r.url)}`);
   if (r.stack.length) console.log(dim(`detected: ${r.stack.join(", ")}`));
   console.log("");
 

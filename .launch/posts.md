@@ -1,6 +1,6 @@
 # Distribution posts
 
-Repo: https://github.com/NishantDixit1/launch-check
+Repo: https://github.com/NishantDixit1/leakprobe
 Hosted: https://stackwrights.com/tools/launch-check
 
 ---
@@ -10,10 +10,10 @@ Hosted: https://stackwrights.com/tools/launch-check
 **Title** (80 char limit, no emoji, no hype, HN hates both)
 
 ```
-Show HN: Launch-check – find out if your deployed app is leaking database rows
+Show HN: Leakprobe – find out if your deployed app is leaking database rows
 ```
 
-**URL:** https://github.com/NishantDixit1/launch-check
+**URL:** https://github.com/NishantDixit1/leakprobe
 
 **First comment, post it immediately after submitting:**
 
@@ -46,7 +46,7 @@ written for the assistant that built the app. Knowing RLS is off does not help
 if you do not know what RLS is, so `--fix` gives you something to paste into
 Claude Code or Cursor.
 
-  npx launch-check https://yourapp.com --fix
+  npx leakprobe https://yourapp.com --fix
 
 Exit codes are set up for CI (2 on a critical or high), which is where I would
 actually want this.
@@ -71,7 +71,7 @@ I built a free CLI that tells you if your Supabase tables are publicly readable
 **Body**
 
 ```
-Short version: `npx launch-check https://yourapp.com`
+Short version: `npx leakprobe https://yourapp.com`
 
 Background. I run a small dev studio and we keep getting asked to look at apps
 built quickly in Lovable, Bolt or Replit that are already live with real users.
@@ -104,7 +104,7 @@ public, which is rather the point.
 Each finding comes with a prompt you can paste into whatever built the app, so
 you get the fix and not just the bad news.
 
-MIT, zero dependencies: https://github.com/NishantDixit1/launch-check
+MIT, zero dependencies: https://github.com/NishantDixit1/leakprobe
 
 Happy to add checks if you tell me what you keep getting bitten by. Firebase
 rules are the obvious gap.
@@ -127,7 +127,7 @@ CLI that probes your project for tables that answer anon requests
 **Body**
 
 ```
-npx launch-check https://yourapp.com
+npx leakprobe https://yourapp.com
 
 Pulls the anon key out of your published bundle (it is a JWT with role=anon, so
 it is identifiable), reads /rest/v1/ for the table list, then requests one row
@@ -140,7 +140,7 @@ It also checks whether a service_role token has ended up in the bundle, which is
 the worse version of the same problem and more common than you would hope.
 
 Caps at 25 tables per scan to keep it quick. MIT:
-https://github.com/NishantDixit1/launch-check
+https://github.com/NishantDixit1/leakprobe
 ```
 
 ---

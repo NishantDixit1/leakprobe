@@ -32,13 +32,13 @@ test("-v is the same as --version", async () => {
 test("--help exits 0", async () => {
   const r = await run(["--help"]);
   assert.equal(r.code, 0);
-  assert.match(r.stdout, /launch-check/);
+  assert.match(r.stdout, /leakprobe/);
 });
 
 test("no arguments prints help and exits 1", async () => {
   const r = await run([]);
   assert.equal(r.code, 1);
-  assert.match(r.stdout, /npx launch-check/);
+  assert.match(r.stdout, /npx leakprobe/);
 });
 
 test("an unreachable host exits 1", async () => {
