@@ -19,12 +19,17 @@ This tells you, in about five seconds, whether that somebody would get anything.
 | Check | What it means |
 | --- | --- |
 | **Database answers strangers** | Asks your Supabase database for a row without logging in. If it hands one over, that table is public. |
+| **Firebase rules left open** | Reads the top level of your Realtime Database as an anonymous visitor. Key names only, never your records. |
 | **Secret keys in your bundle** | Reads the JavaScript every visitor downloads, looking for keys that should have stayed on your server. |
-| **Downloadable config files** | Requests `.env`, `.env.local`, `.env.production` and `.git/config` the way anyone could. |
+| **Public storage buckets** | Checks whether your Supabase buckets can be listed anonymously, and which are serving files to anyone. |
+| **Downloadable config files** | Requests `.env`, `.git/config`, `backup.sql`, `db.sqlite`, `.npmrc` and others the way anyone could. |
+| **Session cookie flags** | HttpOnly, Secure and SameSite on the cookies that carry a login. |
+| **CORS that trusts anyone** | Sends an invented Origin to see whether your app will take requests, and credentials, from any site. |
+| **Plain http served** | Checks that http redirects to https instead of answering. |
 | **Public source maps** | Checks whether your original, uncompressed source is republished alongside the build. |
 | **Security headers** | CSP, HSTS, `X-Content-Type-Options`, frame protection. |
 
-Detects Next.js, Vite, Supabase, Firebase, Stripe and Clerk, and adapts what it checks.
+Detects Next.js, Vite, Supabase, Firebase, Stripe and Clerk, and adapts what it runs to what it finds.
 
 ## Example
 
@@ -129,7 +134,7 @@ There is a hosted version at [stackwrights.com/tools/launch-check](https://stack
 npm test
 ```
 
-44 tests. The secret patterns are tested against real key formats and
+58 tests. The secret patterns are tested against real key formats and
 against source that must *not* trip them, because a false positive is
 the failure mode that matters here. The scan itself is tested end to end
 against a deliberately leaking fixture server rather than a mocked
@@ -141,7 +146,8 @@ an unredacted secret.
 Issues and pull requests welcome, particularly:
 
 - More secret patterns. The list in `src/secrets.ts` is deliberately conservative, because a false positive on a security report costs more than a miss.
-- Checks for stacks beyond Supabase. Firebase rules are the obvious gap.
+- Firestore rules. The Realtime Database is covered; Firestore needs collection names to probe and there is no reliable way to discover them from outside yet.
+- Checks for stacks beyond Supabase and Firebase.
 
 ## Licence
 

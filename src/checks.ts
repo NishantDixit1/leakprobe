@@ -1,6 +1,14 @@
 import type { Finding, ScanResult } from "./types.js";
 import { get, parseTarget } from "./fetch.js";
 import { findAnonKey, findSecrets } from "./secrets.js";
+import {
+  cookieCheck,
+  corsCheck,
+  firebaseCheck,
+  httpsRedirectCheck,
+  storageCheck,
+  EXTRA_PATHS,
+} from "./extra-checks.js";
 
 /**
  * What a stranger can see, reported in language you can act on.
@@ -63,6 +71,21 @@ If this is a Next.js project, add a headers() function in next.config.ts. If it 
 
   if (target.url.protocol === "https:") passed.push("Served over HTTPS");
 
+  // ── Session cookie flags ───────────────────────────────────────────
+  const cookieFinding = cookieCheck(page.cookies, target.url.protocol === "https:");
+  if (cookieFinding) findings.push(cookieFinding);
+  else if (page.cookies.length > 0) passed.push("Session cookies carry the usual flags");
+
+  // ── Plain http, and who may call the app ───────────────────────────
+  if (target.url.protocol === "https:") {
+    const redirectFinding = await httpsRedirectCheck(target.url.hostname);
+    if (redirectFinding) findings.push(redirectFinding);
+    else passed.push("Plain http redirects to https");
+  }
+
+  const corsFinding = await corsCheck(target.url.toString());
+  if (corsFinding) findings.push(corsFinding);
+
   // ── Collect the JavaScript the browser downloads ───────────────────
   const scriptSrcs = [...page.body.matchAll(/<script[^>]+src=["']([^"']+)["']/g)]
     .map((m) => m[1])
@@ -89,6 +112,15 @@ If this is a Next.js project, add a headers() function in next.config.ts. If it 
   if (/firebaseio|firebaseapp/i.test(bundle)) stack.add("Firebase");
   if (/js\.stripe\.com/i.test(bundle)) stack.add("Stripe");
   if (/clerk\./i.test(bundle)) stack.add("Clerk");
+
+  // ── Firebase, which fails the same way Supabase does ───────────────
+  const firebaseFinding = await firebaseCheck(bundle);
+  if (firebaseFinding) {
+    stack.add("Firebase");
+    findings.push(firebaseFinding);
+  } else if (stack.has("Firebase")) {
+    passed.push("Firebase database refused an anonymous read");
+  }
 
   // ── Exposed secrets ────────────────────────────────────────────────
   const leaked = findSecrets(bundle).map((s) => `${s.name} (${s.redacted}) — ${s.note}`);
@@ -213,6 +245,9 @@ Then give me the SQL, and give me a test I can run as a logged-in user to confir
         passed.push("Database refused anonymous read requests");
       }
     }
+    const storageFinding = await storageCheck(supaUrl, anonKey);
+    if (storageFinding) findings.push(storageFinding);
+    else passed.push("Storage buckets are not listable anonymously");
   } else if (stack.has("Supabase")) {
     skipped.push({
       check: "Database permissions",
@@ -238,12 +273,14 @@ Then give me the SQL, and give me a test I can run as a logged-in user to confir
   });
   const spaFallback = decoy?.status === 200;
 
+  const ENV_SHAPE = /^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=/m;
   const SENSITIVE: { path: string; looksReal: RegExp }[] = [
     // An env file is KEY=value lines, not markup.
-    { path: "/.env", looksReal: /^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=/m },
-    { path: "/.env.local", looksReal: /^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=/m },
-    { path: "/.env.production", looksReal: /^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=/m },
+    { path: "/.env", looksReal: ENV_SHAPE },
+    { path: "/.env.local", looksReal: ENV_SHAPE },
+    { path: "/.env.production", looksReal: ENV_SHAPE },
     { path: "/.git/config", looksReal: /\[core\]/ },
+    ...EXTRA_PATHS.map(({ path, looksReal }) => ({ path, looksReal })),
   ];
 
   const exposed: string[] = [];
