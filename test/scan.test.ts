@@ -25,18 +25,31 @@ const state = {
   serveEnv: true,
   leakKey: true,
   headers: false,
+  /** Answer 200 with index.html for every unknown path, like a Vite SPA. */
+  spa: false,
 };
 
 before(async () => {
   server = http.createServer((req, res) => {
     const url = req.url ?? "/";
 
+    const INDEX = `<!doctype html><html lang="en"><head><meta charset="UTF-8" /></head><body><script src="/app.js"></script></body></html>`;
+
     if (url === "/.env" || url === "/.env.local" || url === "/.env.production") {
-      if (!state.serveEnv) return void res.writeHead(404).end("nope");
-      return void res.writeHead(200, { "content-type": "text/plain" })
-        .end("DATABASE_URL=postgres://u:p@host/db\nSTRIPE_KEY=sk_live_x");
+      if (state.serveEnv) {
+        return void res.writeHead(200, { "content-type": "text/plain" })
+          .end("DATABASE_URL=postgres://u:p@host/db\nAPI_TOKEN=abc123");
+      }
+      if (state.spa) return void res.writeHead(200, { "content-type": "text/html" }).end(INDEX);
+      return void res.writeHead(404).end("nope");
     }
-    if (url === "/.git/config") return void res.writeHead(404).end("nope");
+    if (url === "/.git/config") {
+      if (state.spa) return void res.writeHead(200, { "content-type": "text/html" }).end(INDEX);
+      return void res.writeHead(404).end("nope");
+    }
+    if (state.spa && url !== "/" && url !== "/app.js") {
+      return void res.writeHead(200, { "content-type": "text/html" }).end(INDEX);
+    }
 
     if (url === "/app.js") {
       const secret = state.leakKey ? `const k="sk-proj-abcdefghijklmnopqrstuvwxyz0123456789";` : "";
@@ -68,7 +81,7 @@ const ok = (r: ScanResult | { error: string }): ScanResult => {
 const ids = (r: ScanResult) => r.findings.map((f) => f.id);
 
 test("finds the leaked key, the served .env and the missing headers", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false });
   const r = ok(await runScan(base));
   assert.ok(ids(r).includes("secrets"), "missed the API key in the bundle");
   assert.ok(ids(r).includes("exposed-files"), "missed the served .env");
@@ -76,20 +89,20 @@ test("finds the leaked key, the served .env and the missing headers", async () =
 });
 
 test("the anon key alone is not reported as a leak", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false });
   const r = ok(await runScan(base));
   assert.deepEqual(ids(r), [], `clean app reported: ${JSON.stringify(r.findings.map((f) => f.title))}`);
   assert.ok(r.passed.some((p) => p.includes("No secret keys")));
 });
 
 test("a clean app passes the header check", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false });
   const r = ok(await runScan(base));
   assert.ok(r.passed.some((p) => p.includes("Security headers")));
 });
 
 test("findings never contain row data, and secrets are redacted", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false });
   const r = ok(await runScan(base));
   const dump = JSON.stringify(r);
   assert.ok(!dump.includes("sk-proj-abcdefghijklmnopqrstuvwxyz0123456789"), "full secret leaked into the report");
@@ -97,7 +110,7 @@ test("findings never contain row data, and secrets are redacted", async () => {
 });
 
 test("every finding carries a fix prompt", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false });
   const r = ok(await runScan(base));
   for (const f of r.findings) {
     assert.ok(f.fixPrompt.length > 40, `${f.id} has no usable fix prompt`);
@@ -106,7 +119,7 @@ test("every finding carries a fix prompt", async () => {
 });
 
 test("critical findings sort above medium", async () => {
-  Object.assign(state, { serveEnv: true, leakKey: true, headers: false });
+  Object.assign(state, { serveEnv: true, leakKey: true, headers: false, spa: false });
   const r = ok(await runScan(base));
   const rank = ["critical", "high", "medium", "info"];
   const seq = r.findings.map((f) => rank.indexOf(f.severity));
@@ -114,9 +127,39 @@ test("critical findings sort above medium", async () => {
 });
 
 test("Supabase is detected and reported in the stack", async () => {
-  Object.assign(state, { serveEnv: false, leakKey: false, headers: true });
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: false });
   const r = ok(await runScan(base));
   assert.ok(r.stack.includes("Supabase"), `stack was ${JSON.stringify(r.stack)}`);
+});
+
+// ── The regression that mattered most ───────────────────────────────
+// A single-page app answers 200 with index.html for every unknown path.
+// Testing status alone reported every Vite, React Router, Lovable and
+// Bolt app as serving a .env file, which is most of the audience.
+
+test("an SPA catch-all route is not reported as an exposed .env", async () => {
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: true });
+  const r = ok(await runScan(base));
+  assert.ok(
+    !ids(r).includes("exposed-files"),
+    "reported a config file on a host that answers 200 for everything",
+  );
+});
+
+test("an SPA says the file check was skipped rather than claiming it passed", async () => {
+  Object.assign(state, { serveEnv: false, leakKey: false, headers: true, spa: true });
+  const r = ok(await runScan(base));
+  assert.ok(
+    r.skipped.some((x) => x.check === "Exposed configuration files"),
+    "silently dropped the check instead of reporting it as skipped",
+  );
+  assert.ok(!r.passed.some((p) => p.includes("No configuration files")));
+});
+
+test("a genuinely served .env is still caught on an SPA host", async () => {
+  Object.assign(state, { serveEnv: true, leakKey: false, headers: true, spa: true });
+  const r = ok(await runScan(base));
+  assert.ok(ids(r).includes("exposed-files"), "missed a real .env behind an SPA fallback");
 });
 
 test("an unreachable host returns an error rather than throwing", async () => {

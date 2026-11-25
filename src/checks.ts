@@ -221,10 +221,50 @@ Then give me the SQL, and give me a test I can run as a logged-in user to confir
   }
 
   // ── Files that should never be served ──────────────────────────────
+  //
+  // A single-page app answers 200 with index.html for every unknown
+  // path, which is most of the audience for this tool: Vite, React
+  // Router, anything built in Lovable or Bolt. Testing status alone, or
+  // testing the body loosely, reports every one of them as leaking a
+  // .env file. A critical false positive on the common case is worse
+  // than missing the finding entirely.
+  //
+  // So: establish the host's behaviour on a path that certainly does
+  // not exist, then require the response to differ from it AND to
+  // actually look like the file being asked for.
+  const decoy = await get(`${origin}/launch-check-${Date.now().toString(36)}-404`, {
+    maxBytes: 20_000,
+    timeoutMs: 5_000,
+  });
+  const spaFallback = decoy?.status === 200;
+
+  const SENSITIVE: { path: string; looksReal: RegExp }[] = [
+    // An env file is KEY=value lines, not markup.
+    { path: "/.env", looksReal: /^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=/m },
+    { path: "/.env.local", looksReal: /^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=/m },
+    { path: "/.env.production", looksReal: /^\s*(?:export\s+)?[A-Z_][A-Z0-9_]*\s*=/m },
+    { path: "/.git/config", looksReal: /\[core\]/ },
+  ];
+
   const exposed: string[] = [];
-  for (const path of ["/.env", "/.env.local", "/.env.production", "/.git/config"]) {
+  for (const { path, looksReal } of SENSITIVE) {
     const res = await get(`${origin}${path}`, { maxBytes: 20_000, timeoutMs: 5_000 });
-    if (res && res.status === 200 && /=|\[core\]/.test(res.body)) exposed.push(path);
+    if (!res || res.status !== 200) continue;
+    // Markup is the app answering, never the file itself.
+    if (/html/i.test(res.headers.get("content-type") ?? "")) continue;
+    if (/^\s*<(?:!doctype|html)/i.test(res.body)) continue;
+    // Same bytes as a path that does not exist means a catch-all route.
+    if (spaFallback && decoy && res.body === decoy.body) continue;
+    if (!looksReal.test(res.body)) continue;
+    exposed.push(path);
+  }
+
+  if (spaFallback && exposed.length === 0) {
+    skipped.push({
+      check: "Exposed configuration files",
+      reason:
+        "This host answers 200 for paths that do not exist, so a served file cannot be told apart from the app's catch-all route by status alone. Checked the response contents instead and none looked like a real config file.",
+    });
   }
 
   if (exposed.length > 0) {
@@ -238,7 +278,7 @@ Then give me the SQL, and give me a test I can run as a logged-in user to confir
       evidence: exposed,
       fixPrompt: `My deployed site is serving these files publicly: ${exposed.join(", ")}. Stop serving them, make sure they are in .gitignore, confirm whether they were ever committed to git history, and list every credential inside them that I now need to rotate.`,
     });
-  } else {
+  } else if (!spaFallback) {
     passed.push("No configuration files exposed");
   }
 
