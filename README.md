@@ -108,6 +108,8 @@ Every check reports itself as passed, failed or skipped, so a short report is ne
 
 If the site is behind Cloudflare or Vercel bot protection, the scan refuses to run rather than describing the challenge page, which would otherwise look like an app with no security headers and no JavaScript.
 
+A table that accepts an anonymous request and returns no rows is reported as undetermined rather than as a pass. That response is what a correctly scoped policy looks like, and also what an unprotected empty table looks like, and the two cannot be told apart from outside. Treating it as a pass meant a pre-launch app with empty tables scanned clean and opened up once real users signed up.
+
 The table probe stops at 25 tables by default so a large schema does not make a scan slow, and it always reports how many it covered and how many it did not. A cap nobody is told about turns "nothing found" into a claim the scan never made. Use `--all-tables` to cover every one.
 
 It does not test anything that needs the app actually running: how your login flow behaves in use, file uploads, or bugs that only appear under real traffic. It does not judge whether your business rules are correct, because that is a question about your intent rather than your code. Known vulnerabilities in your packages are better handled by GitHub's Dependabot, which is free.
@@ -140,7 +142,7 @@ There is a hosted version at [stackwrights.com/tools/launch-check](https://stack
 npm test
 ```
 
-65 tests. The secret patterns are tested against real key formats and
+71 tests. The secret patterns are tested against real key formats and
 against source that must *not* trip them, because a false positive is
 the failure mode that matters here. The scan itself is tested end to end
 against a deliberately leaking fixture server rather than a mocked

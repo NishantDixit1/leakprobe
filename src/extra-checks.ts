@@ -220,3 +220,28 @@ export function tableCoverage(total: number, maxTables: number) {
         : null,
   };
 }
+
+export type ProbeOutcome = "open" | "answered-empty" | "refused" | "unknown";
+
+/**
+ * What one table's response actually tells you.
+ *
+ * The middle case is the one that matters. A 200 with an empty array
+ * means the request was permitted and there was nothing to return,
+ * which is what a correctly scoped policy looks like AND what an
+ * unprotected empty table looks like. Counting it as refused meant a
+ * pre-launch app with empty tables scanned clean and opened up the
+ * moment real users signed up.
+ */
+export function classifyProbe(status: number, body: string): ProbeOutcome {
+  if (status !== 200) return "refused";
+  let rows: unknown;
+  try {
+    rows = JSON.parse(body);
+  } catch {
+    return "unknown";
+  }
+  if (!Array.isArray(rows)) return "unknown";
+  if (rows.length === 0) return "answered-empty";
+  return rows[0] && typeof rows[0] === "object" ? "open" : "unknown";
+}

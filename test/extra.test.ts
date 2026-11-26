@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cookieCheck, tableCoverage } from "../src/extra-checks.js";
+import { classifyProbe, cookieCheck, tableCoverage } from "../src/extra-checks.js";
 
 // ── Cookie flags ────────────────────────────────────────────────────
 // Only cookies that plausibly carry a session are judged. Flagging a
@@ -86,4 +86,34 @@ test("lifting the cap covers everything", () => {
 
 test("a schema with no tables is not described as partially covered", () => {
   assert.equal(tableCoverage(0, 25).note, null);
+});
+
+// ── What one table's answer means ───────────────────────────────────
+// Reported by a reader: a 200 with [] was counted as "refused", so a
+// pre-launch app with empty tables scanned clean and opened up the
+// moment real users signed up.
+
+test("a row handed to an anonymous request is open", () => {
+  assert.equal(classifyProbe(200, '[{"id":1,"email":"a@b.com"}]'), "open");
+});
+
+test("a 200 with an empty array is not treated as refused", () => {
+  assert.equal(classifyProbe(200, "[]"), "answered-empty");
+  assert.notEqual(classifyProbe(200, "[]"), "refused");
+});
+
+test("a 401 is refused", () => {
+  assert.equal(classifyProbe(401, '{"message":"permission denied"}'), "refused");
+});
+
+test("a 403 is refused", () => {
+  assert.equal(classifyProbe(403, "{}"), "refused");
+});
+
+test("a non-JSON body is not guessed at", () => {
+  assert.equal(classifyProbe(200, "<html>nope</html>"), "unknown");
+});
+
+test("a JSON object rather than an array is not guessed at", () => {
+  assert.equal(classifyProbe(200, '{"message":"something else"}'), "unknown");
 });

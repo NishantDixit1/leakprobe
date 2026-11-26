@@ -6,6 +6,7 @@ import {
   corsCheck,
   firebaseCheck,
   httpsRedirectCheck,
+  classifyProbe,
   storageCheck,
   tableCoverage,
   EXTRA_PATHS,
@@ -262,21 +263,31 @@ Then show me the diff before applying it.`,
       const coverage = cover.label;
 
       const open: string[] = [];
+      // A 200 with an empty array means the request was permitted and
+      // there was simply nothing to hand back. That is what an
+      // unprotected empty table looks like, and also what a correctly
+      // scoped policy looks like when auth.uid() filters every row for
+      // an anonymous caller. The two are indistinguishable from
+      // outside, so neither "leaking" nor "refused" is an honest
+      // answer. Reported by a reader: counting these as refused meant a
+      // pre-launch app with empty tables scanned clean and opened up
+      // the moment real users signed up.
+      const answeredEmpty: string[] = [];
+
       for (const table of tables.slice(0, cover.checked)) {
         const probe = await get(
           `${supaUrl}/rest/v1/${encodeURIComponent(table)}?select=*&limit=1`,
           { headers: auth, maxBytes: 50_000, timeoutMs: 5_000 },
         );
-        if (!probe || probe.status !== 200) continue;
-        try {
-          const rows: unknown = JSON.parse(probe.body);
-          if (Array.isArray(rows) && rows.length > 0 && rows[0] && typeof rows[0] === "object") {
-            // Column names only. Row contents are never surfaced.
-            const cols = Object.keys(rows[0] as object).slice(0, 8).join(", ");
-            open.push(`${table} — returned a row to an anonymous request (columns: ${cols})`);
-          }
-        } catch {
-          /* not JSON, ignore */
+        if (!probe) continue;
+        const outcome = classifyProbe(probe.status, probe.body);
+        if (outcome === "answered-empty") {
+          answeredEmpty.push(table);
+        } else if (outcome === "open") {
+          // Column names only. Row contents are never surfaced.
+          const rows = JSON.parse(probe.body) as object[];
+          const cols = Object.keys(rows[0] as object).slice(0, 8).join(", ");
+          open.push(`${table} — returned a row to an anonymous request (columns: ${cols})`);
         }
       }
 
@@ -302,8 +313,15 @@ For each table:
 
 Then give me the SQL, and give me a test I can run as a logged-in user to confirm I cannot read another user's rows.`,
         });
-      } else {
+      } else if (answeredEmpty.length === 0) {
         passed.push(`Database refused anonymous read requests (${coverage})`);
+      }
+
+      if (answeredEmpty.length > 0) {
+        skipped.push({
+          check: "Database permissions on tables that answered with no rows",
+          reason: `${answeredEmpty.length} table${answeredEmpty.length > 1 ? "s" : ""} accepted an anonymous request and returned no rows: ${answeredEmpty.slice(0, 8).join(", ")}${answeredEmpty.length > 8 ? ", and others" : ""}. That is what a correctly scoped policy looks like, and also what an unprotected empty table looks like, and the two cannot be told apart from outside. If ${answeredEmpty.length > 1 ? "any of these are" : "this is"} empty right now rather than protected, ${answeredEmpty.length > 1 ? "they" : "it"} will start handing rows over as soon as real users sign up. Check the policies in the Supabase dashboard.`,
+        });
       }
 
       if (cover.note) skipped.push(cover.note);
